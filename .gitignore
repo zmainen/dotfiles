@@ -1,0 +1,38 @@
+# Secrets and sensitive files
+.secrets
+.secrets.*
+*.key
+*.pem
+.env
+.env.*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.swp
+*.swo
+*~
+.#*
+
+# Logs
+*.log
+
+# Cache
+.cache/
+*.cache
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
