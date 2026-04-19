@@ -1,74 +1,57 @@
 #!/usr/bin/env zsh
-# Clean ZSH Configuration
 
-# Suppress conda and virtual env prompt changes
-export CONDA_CHANGEPS1=false
-export VIRTUAL_ENV_DISABLE_PROMPT=1
+# --- Homebrew ---
+export PATH="/opt/homebrew/bin:$PATH"
 
-# Path to your oh-my-zsh installation
+# --- Oh My Zsh ---
 export ZSH="$HOME/.oh-my-zsh"
-
-# Theme
 ZSH_THEME="ys"
-
-# Plugins
 plugins=(git)
-
-# Load Oh My Zsh
 source $ZSH/oh-my-zsh.sh
 
-# User configuration
+# --- Secrets ---
+[ -f ~/.secrets ] && source ~/.secrets
 
-# Fix issues with exa
-alias exa='eza'
-
-# Load secure API keys (never commit this file!)
-if [ -f ~/.secrets ]; then
-    source ~/.secrets
-fi
-
-# PATH additions
+# --- PATH ---
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 export PATH="$HOME/github/signal-cli/:$PATH"
-export PATH="/Applications/NEURON/bin":$PATH
-export PATH="/opt/homebrew/Cellar/hdf5/1.14.3:$PATH"
-export PATH="/opt/homebrew/Cellar/ffmpeg/6.0_2:$PATH"
+export PATH="/Applications/NEURON/bin:$PATH"
+export PATH="$(brew --prefix hdf5)/bin:$PATH"
+export PATH="$(brew --prefix ffmpeg)/bin:$PATH"
 
-# PYTHONPATH
-export PYTHONPATH="/Applications/NEURON/lib/python":$PYTHONPATH
-export PYTHONPATH="$HOME/python/lunar_tools:$HOME/python/lunar_tools/lunar_tools":$PYTHONPATH
+# --- PYTHONPATH ---
+export PYTHONPATH="/Applications/NEURON/lib/python:$PYTHONPATH"
+export PYTHONPATH="$HOME/python/lunar_tools:$HOME/python/lunar_tools/lunar_tools:$PYTHONPATH"
 
-# Display for Quartz
+# --- Display ---
 export DISPLAY=:0
 
-# Load shell aliases (suppress any output)
-[ -f "$HOME/.shell_aliases/cli.sh" ] && source "$HOME/.shell_aliases/cli.sh" 2>/dev/null
-[ -f "$HOME/.shell_aliases/other.sh" ] && source "$HOME/.shell_aliases/other.sh" 2>/dev/null
-[ -f "$HOME/.shell_aliases/tmux.sh" ] && source "$HOME/.shell_aliases/tmux.sh" 2>/dev/null
+# --- Prompt ---
+export CONDA_CHANGEPS1=false
+export VIRTUAL_ENV_DISABLE_PROMPT=1
+RPROMPT='${CONDA_DEFAULT_ENV:+🐍 $CONDA_DEFAULT_ENV}'
 
-# Conda auto-env (with output suppression)
-if [ -f "$HOME/.scripts/conda_auto_env.zsh" ]; then
-    # Temporarily redirect stderr to suppress any warnings
-    exec 3>&2 2>/dev/null
-    source "$HOME/.scripts/conda_auto_env.zsh"
-    exec 2>&3
-fi
+# --- Aliases ---
+alias exa='eza'
+[ -f ~/.shell_aliases ] && source ~/.shell_aliases
 
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/Users/zach/anaconda/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/Users/zach/anaconda/etc/profile.d/conda.sh" ]; then
-        . "/Users/zach/anaconda/etc/profile.d/conda.sh"
-    else
-        export PATH="/Users/zach/anaconda/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
+# --- Conda ---
+[ -f "/Users/zach/anaconda/etc/profile.d/conda.sh" ] && . "/Users/zach/anaconda/etc/profile.d/conda.sh"
+[ -f "$HOME/Projects/dotfiles/conda_auto_env.zsh" ] && . "$HOME/Projects/dotfiles/conda_auto_env.zsh" 2>/dev/null
 
-# Suppress conda activation messages
-conda config --set changeps1 false 2>/dev/null
+# --- filen-cli ---
+export PATH="$PATH:$HOME/.filen-cli/bin"
 
-# Add any custom configurations below this line
+# --- Google Cloud SDK ---
+export CLOUDSDK_PYTHON=/opt/homebrew/bin/python3
+if [ -f "$HOME/Library/google-cloud-sdk/path.zsh.inc" ]; then . "$HOME/Library/google-cloud-sdk/path.zsh.inc"; fi
+
+# --- audio-bridge ---
+abs() {
+  conda activate "audio" >/dev/null 2>&1 || return $?
+  python -m audio_bridge.tools.abs "$@"
+}
+
+# Claude Code provider switching (max | vertex | apikey)
+source ~/Projects/dotfiles/claude-provider.sh
