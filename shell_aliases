@@ -1,0 +1,15 @@
+# HAAK scripts
+alias haak-reauth="bash ~/Projects/haak/infra/scripts/gcloud-reauth.sh"
+alias haak-vertex-refresh="bash ~/Projects/haak/infra/scripts/vertex-token-refresh.sh"
+alias haak-deploy-review="bash ~/Projects/haak/infra/scripts/deploy-haak-review.sh"
+alias who="~/Projects/haak/infra/scripts/who.sh"
+alias msg="~/Projects/haak/infra/scripts/msg"
+alias inbox="~/Projects/haak/infra/scripts/inbox"
+
+claude() {
+    if [[ "$PWD" == */Projects/haak* ]]; then
+        command claude --agent haak "$@"
+    else
+        command claude "$@"
+    fi
+}
