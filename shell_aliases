@@ -1,14 +1,30 @@
 # HAAK scripts
+alias whatsapp="HAAK_USER=zach HAAK_ROOT=~/Projects/haak ~/Projects/haak/infra/services/whatsapp/whatsapp"
+alias contacts="HAAK_USER=zach HAAK_ROOT=~/Projects/haak python3 ~/Projects/haak/platform/methods/communication/contacts/contacts.py"
 alias haak-reauth="bash ~/Projects/haak/infra/scripts/gcloud-reauth.sh"
 alias haak-vertex-refresh="bash ~/Projects/haak/infra/scripts/vertex-token-refresh.sh"
 alias haak-deploy-review="bash ~/Projects/haak/infra/scripts/deploy-haak-review.sh"
 alias who="~/Projects/haak/infra/scripts/who.sh"
 alias msg="~/Projects/haak/infra/scripts/msg"
 alias inbox="~/Projects/haak/infra/scripts/inbox"
+alias sdb="python ~/Projects/haak/infra/scripts/session-db"
+alias sr="~/Projects/haak/infra/scripts/session-resume"
+
+# dotfiles tools
+alias secrets="python3 ~/Projects/dotfiles/clean-secrets.py"
 
 claude() {
-    if [[ "$PWD" == */Projects/haak* ]]; then
-        command claude --agent haak "$@"
+    local dir="$PWD" agent=""
+    if [[ "$dir" == */Projects/haak* ]]; then
+        local haak_root="${dir%%/Projects/haak/*}/Projects/haak"
+        while [[ "$dir" == "$haak_root"/* || "$dir" == "$haak_root" ]]; do
+            if [[ -f "$dir/.haak/agent" ]]; then
+                agent="$(<"$dir/.haak/agent")"
+                break
+            fi
+            dir="${dir%/*}"
+        done
+        command claude --agent "${agent:-haak}" "$@"
     else
         command claude "$@"
     fi
