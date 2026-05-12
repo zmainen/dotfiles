@@ -10,8 +10,8 @@ alias inbox="~/Projects/haak/infra/scripts/inbox"
 alias sdb="python ~/Projects/haak/infra/scripts/session-db"
 alias sr="~/Projects/haak/infra/scripts/session-resume"
 
-# dotfiles tools
-alias secrets="python3 ~/Projects/dotfiles/clean-secrets.py"
+# tools
+alias secrets="~/Projects/secrets-cli/secrets"
 
 claude() {
     local dir="$PWD" agent=""
