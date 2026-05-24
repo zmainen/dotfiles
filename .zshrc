@@ -10,7 +10,8 @@ plugins=(git)
 source $ZSH/oh-my-zsh.sh
 
 # --- Secrets ---
-[ -f ~/.secrets ] && source ~/.secrets
+# Migrated to macOS Keychain (2026-05-24). Use `secrets` CLI to manage.
+# [ -f ~/.secrets ] && source ~/.secrets
 
 # --- PATH ---
 export PATH="$HOME/.local/bin:$PATH"
@@ -38,7 +39,7 @@ alias exa='eza'
 
 # --- Conda ---
 [ -f "/Users/zach/anaconda/etc/profile.d/conda.sh" ] && . "/Users/zach/anaconda/etc/profile.d/conda.sh"
-[ -f "$HOME/Projects/dotfiles/conda_auto_env.zsh" ] && . "$HOME/Projects/dotfiles/conda_auto_env.zsh" 2>/dev/null
+[ -f "$HOME/Projects/zmainen/dotfiles/conda_auto_env.zsh" ] && . "$HOME/Projects/zmainen/dotfiles/conda_auto_env.zsh" 2>/dev/null
 
 # --- filen-cli ---
 export PATH="$PATH:$HOME/.filen-cli/bin"
@@ -54,4 +55,9 @@ abs() {
 }
 
 # Claude Code provider switching (max | vertex | apikey)
-source ~/Projects/dotfiles/claude-provider.sh
+source ~/Projects/zmainen/dotfiles/claude-provider.sh
+
+# --- ZED ---
+export DISABLE_AUTO_TITLE=true
+export FLYCTL_INSTALL="$HOME/.fly"
+export PATH="$FLYCTL_INSTALL/bin:$PATH"
