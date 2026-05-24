@@ -13,6 +13,9 @@ source $ZSH/oh-my-zsh.sh
 # Migrated to macOS Keychain (2026-05-24). Use `secrets` CLI to manage.
 # [ -f ~/.secrets ] && source ~/.secrets
 
+# --- Machine identity ---
+export HAAK_MACHINE="mac"
+
 # --- PATH ---
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
