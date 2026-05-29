@@ -9,12 +9,15 @@ ZSH_THEME="ys"
 plugins=(git)
 source $ZSH/oh-my-zsh.sh
 
-# --- Secrets ---
-# Migrated to macOS Keychain (2026-05-24). Use `secrets` CLI to manage.
-# [ -f ~/.secrets ] && source ~/.secrets
-
 # --- Machine identity ---
 export HAAK_MACHINE="mac"
+export HAAK_ROOT="$HOME/Projects/haak"
+
+# --- Secrets ---
+# Values live in the macOS Keychain (migrated 2026-05-24). `secrets export`
+# emits the curated shell_env set from Keychain — the replacement for the old
+# `source ~/.secrets`. See infra/credentials/2026-05-29-secrets-env-migration-rfc.md
+eval "$("$HOME/Projects/secrets-cli/secrets" export 2>/dev/null)"
 
 # --- PATH ---
 export PATH="$HOME/.local/bin:$PATH"
