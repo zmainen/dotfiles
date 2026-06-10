@@ -39,7 +39,9 @@ claude-provider() {
         status)
             echo ""
             printf "  ${BOLD}Claude Code Provider${RESET}\n\n"
-            if [ "${CLAUDE_CODE_USE_VERTEX:-}" = "1" ]; then
+            if [ "${ANTHROPIC_AUTH_TOKEN:-}" = "ollama" ]; then
+                printf "  ${GREEN}●${RESET} Provider: ${GREEN}Ollama${RESET} (${ANTHROPIC_BASE_URL:-http://localhost:11434})\n"
+            elif [ "${CLAUDE_CODE_USE_VERTEX:-}" = "1" ]; then
                 printf "  ${GREEN}●${RESET} Provider: ${GREEN}Vertex AI${RESET} (project: ${ANTHROPIC_VERTEX_PROJECT_ID:-unset})\n"
                 printf "    Region:  ${CLOUD_ML_REGION:-unset}\n"
             elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
@@ -76,10 +78,42 @@ claude-provider() {
             ;;
 
         vertex)
+            # Consult sentinel health verdict before switching.
+            local _haak_db="${HAAK_ROOT:-$HOME/Projects/haak}/infra/var/haak.db"
+            if [ -f "$_haak_db" ] && command -v sqlite3 >/dev/null 2>&1; then
+                local _vertex_errors
+                _vertex_errors=$(sqlite3 "$_haak_db" \
+                    "SELECT error_class FROM model_registry WHERE provider='vertex' AND error_class IS NOT NULL AND error_class != '' GROUP BY error_class" 2>/dev/null)
+                if [ -n "$_vertex_errors" ]; then
+                    case "$_vertex_errors" in
+                        *auth*)
+                            printf "  ${RED}⚠ Vertex auth broken${RESET} — sentinel detected credential failure.\n"
+                            printf "  Fix: gcloud auth activate-service-account vertex@%s.iam.gserviceaccount.com --key-file=%s\n" "$GCP_PROJECT" "$ADC_PATH"
+                            printf "  Falling back to ${BOLD}Max${RESET}.\n\n"
+                            claude-provider max
+                            return ;;
+                        *not_enabled*)
+                            printf "  ${YELLOW}⚠ Some models not enabled on Vertex${RESET} — enable in GCP Model Garden console.\n" ;;
+                        *rate_limit*)
+                            if [ "$GCP_REGION" != "global" ]; then
+                                printf "  ${YELLOW}⚠ Regional quota exhausted${RESET} — switching to global endpoint.\n"
+                                GCP_REGION="global"
+                            fi ;;
+                    esac
+                fi
+            fi
             export CLAUDE_CODE_USE_VERTEX=1
             export ANTHROPIC_VERTEX_PROJECT_ID="$GCP_PROJECT"
             export CLOUD_ML_REGION="$GCP_REGION"
             unset ANTHROPIC_API_KEY 2>/dev/null
+            # Bind ADC to the non-expiring service-account key. Without this,
+            # google-auth falls back to ~/.config/gcloud/application_default_credentials.json
+            # (an OAuth authorized_user token that silently expires) — the June 2026 outage.
+            if [ -f "$ADC_PATH" ]; then
+                export GOOGLE_APPLICATION_CREDENTIALS="$ADC_PATH"
+            else
+                printf "  ${YELLOW}Warning:${RESET} SA key not found at %s — Vertex auth may fall back to OAuth ADC.\n" "$ADC_PATH"
+            fi
             printf "  ${GREEN}●${RESET} Switched to ${GREEN}Vertex AI${RESET} (project: %s, region: %s)\n" "$GCP_PROJECT" "$GCP_REGION"
             ;;
 
@@ -99,16 +133,31 @@ claude-provider() {
                     fi
                 fi
             fi
-            unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION 2>/dev/null
+            unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION GOOGLE_APPLICATION_CREDENTIALS 2>/dev/null
             export ANTHROPIC_API_KEY="$_key"
             printf "  ${GREEN}●${RESET} Switched to ${GREEN}API key${RESET} (%s...)\n" "$(printf %s "$_key" | cut -c1-12)"
             ;;
 
         max)
-            unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION ANTHROPIC_API_KEY 2>/dev/null
+            unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION ANTHROPIC_API_KEY GOOGLE_APPLICATION_CREDENTIALS 2>/dev/null
+            unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL 2>/dev/null
             printf "  ${BOLD}●${RESET} Switched to ${BOLD}Claude Max${RESET} (subscription)\n"
             if ! command -v claude >/dev/null 2>&1 || ! claude auth status >/dev/null 2>&1; then
                 printf "  ${YELLOW}Reminder:${RESET} run ${BOLD}claude login${RESET} if you haven't authenticated yet.\n"
+            fi
+            ;;
+
+        ollama)
+            local _url="${2:-http://localhost:11434}"
+            local _model="${3:-qwen3-coder}"
+            unset CLAUDE_CODE_USE_VERTEX ANTHROPIC_VERTEX_PROJECT_ID CLOUD_ML_REGION ANTHROPIC_API_KEY GOOGLE_APPLICATION_CREDENTIALS 2>/dev/null
+            export ANTHROPIC_AUTH_TOKEN=ollama
+            export ANTHROPIC_BASE_URL="$_url"
+            printf "  ${GREEN}●${RESET} Switched to ${GREEN}Ollama${RESET} (%s)\n" "$_url"
+            printf "    Model hint: ${BOLD}claude --model %s${RESET}\n" "$_model"
+            if ! curl -sf "$_url/api/tags" >/dev/null 2>&1; then
+                printf "  ${YELLOW}Warning:${RESET} Ollama not reachable at %s\n" "$_url"
+                printf "  Start with: ${BOLD}ollama serve${RESET}\n"
             fi
             ;;
 
@@ -153,6 +202,12 @@ claude-provider() {
                     printf "  ${RED}SA key not found:${RESET} %s\n" "$ADC_PATH"
                     printf "  Place your service account key at %s\n" "$ADC_PATH"
                 fi
+                if [ "${GOOGLE_APPLICATION_CREDENTIALS:-}" = "$ADC_PATH" ]; then
+                    printf "  ${GREEN}ADC bound to SA key${RESET} (GOOGLE_APPLICATION_CREDENTIALS set)\n"
+                else
+                    printf "  ${RED}ADC NOT bound to SA key${RESET} — GOOGLE_APPLICATION_CREDENTIALS=%s\n" "${GOOGLE_APPLICATION_CREDENTIALS:-(unset)}"
+                    printf "  Re-run ${BOLD}claude-provider vertex${RESET} to bind it (else auth falls back to expiring OAuth ADC).\n"
+                fi
             elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
                 printf "  Provider: ${YELLOW}API key${RESET}\n"
                 case "$ANTHROPIC_API_KEY" in
@@ -167,6 +222,41 @@ claude-provider() {
             echo ""
             ;;
 
+        probe)
+            # Read sentinel health verdicts from haak.db.
+            local _haak_db="${HAAK_ROOT:-$HOME/Projects/haak}/infra/var/haak.db"
+            echo ""
+            printf "  ${BOLD}Model health (from sentinel)${RESET}\n\n"
+            if [ ! -f "$_haak_db" ]; then
+                printf "  ${YELLOW}No haak.db at %s — sentinel not running.${RESET}\n\n" "$_haak_db"
+                return
+            fi
+            if ! command -v sqlite3 >/dev/null 2>&1; then
+                printf "  ${RED}sqlite3 not found.${RESET}\n\n"
+                return
+            fi
+            # Show per-provider health summary
+            local _results
+            _results=$(sqlite3 -separator '|' "$_haak_db" \
+                "SELECT provider, alias, model_id, status, COALESCE(error_class,'—'), COALESCE(error_msg,''), COALESCE(verified_at,'never'), COALESCE(failed_at,'never') FROM model_registry ORDER BY provider, alias" 2>/dev/null)
+            if [ -z "$_results" ]; then
+                printf "  ${YELLOW}No models in registry.${RESET}\n\n"
+                return
+            fi
+            printf "  %-10s %-8s %-28s %-12s %-12s %s\n" "PROVIDER" "ALIAS" "MODEL" "STATUS" "ERROR" "LAST OK"
+            printf "  %-10s %-8s %-28s %-12s %-12s %s\n" "--------" "-----" "-----" "------" "-----" "-------"
+            echo "$_results" | while IFS='|' read -r _p _a _m _s _ec _em _v _f; do
+                local _color="$GREEN"
+                case "$_s" in
+                    active) _color="$GREEN" ;;
+                    failed|auth_failed) _color="$RED" ;;
+                    *) _color="$YELLOW" ;;
+                esac
+                printf "  %-10s %-8s %-28s ${_color}%-12s${RESET} %-12s %s\n" "$_p" "$_a" "$_m" "$_s" "$_ec" "${_v:0:19}"
+            done
+            echo ""
+            ;;
+
         help|*)
             echo ""
             printf "  ${BOLD}claude-provider${RESET} — Claude Code provider switching\n\n"
@@ -175,6 +265,8 @@ claude-provider() {
             printf "    claude-provider vertex         Switch to Vertex AI (%s / %s)\n" "$GCP_PROJECT" "$GCP_REGION"
             printf "    claude-provider apikey [KEY]   Switch to API key auth\n"
             printf "    claude-provider max            Switch to Claude Max (subscription)\n"
+            printf "    claude-provider ollama [URL]   Switch to Ollama (local LLM)\n"
+            printf "    claude-provider probe          Show sentinel model health verdicts\n"
             printf "    claude-provider fix            Check SA key (no reauth needed)\n"
             printf "    claude-provider push           scp SA key to %s (one-time)\n" "$REMOTE_HOST"
             printf "    claude-provider check          Validate current credentials\n"
