@@ -1,17 +1,58 @@
 ---
 name: email
-description: "Search, read, and send email. Reads Apple Mail's local index (macOS, always live); sends via Apple Mail AppleScript — no OAuth, no HAAK dependency. Use when the user wants to find, read, or send email."
+description: "Search, read, and send email. Reads from IMAP-synced DB (works on any machine via federation) or Apple Mail's local index (macOS fallback); sends via Apple Mail AppleScript — no OAuth, no HAAK dependency. Use when the user wants to find, read, or send email."
 ---
 
 # /email — Search, read, and send email
 
-Self-contained: reads from Apple Mail's local SQLite index, sends via the bundled
-`scripts/apple_mail.py` (AppleScript). No OAuth tokens, no external services.
+Two read surfaces: IMAP-synced DB (primary, works on any machine) and Apple Mail
+Envelope Index (macOS fallback). Sends via the bundled `scripts/apple_mail.py`
+(AppleScript). No OAuth tokens, no external services.
 
-## Reading (Apple Mail — always live, no sync)
+## Reading (IMAP-synced DB — works on any machine)
 
-Apple Mail syncs all IMAP/Exchange accounts locally. The Envelope Index is a SQLite
-DB with metadata for every message; `.emlx` files on disk hold full bodies + attachments.
+The IMAP sync (`imap-mail-sync.py`) runs on the mini, populating SQLite databases
+with full message content. Federation replicates these to every machine via
+`infra/var/mail-*.db`. This is the primary search surface — use it first.
+
+### Databases
+- **Work:** `$HAAK_ROOT/infra/var/mail-gmail-work.db` (zmainen@neuro.fchampalimaud.org)
+- **Personal:** `$HAAK_ROOT/infra/var/mail-gmail-personal.db` (zmainen@gmail.com)
+- **Proton:** `$HAAK_ROOT/infra/var/mail-proton.db`
+
+If `$HAAK_ROOT` is not set, use `~/Projects/haak`.
+
+### Schema
+- `messages` — `id`, `message_id` (UNIQUE), `thread_id`, `sender` (JSON: `{"name":"...","email":"..."}`), `recipients` (JSON array), `subject`, `body`, `timestamp` (DATETIME), `is_read`, `is_outgoing`, `has_attachments`, `attachments` (JSON), `in_reply_to`, `references`, `is_starred`, `last_indexed`
+
+### Search by sender
+```sql
+sqlite3 "file:infra/var/mail-gmail-work.db?mode=ro" "
+  SELECT id, datetime(timestamp,'localtime') ts,
+         json_extract(sender,'$.name') name,
+         json_extract(sender,'$.email') email, subject
+  FROM messages
+  WHERE (json_extract(sender,'$.name') LIKE '%QUERY%'
+         OR json_extract(sender,'$.email') LIKE '%QUERY%')
+  ORDER BY timestamp DESC LIMIT 20"
+```
+- **By subject:** `WHERE subject LIKE '%QUERY%'`
+- **By date:** `WHERE timestamp >= '2026-06-01'`
+- **Outgoing only:** `WHERE is_outgoing = 1`
+- **Thread:** `WHERE thread_id = (SELECT thread_id FROM messages WHERE id = MSG_ID)`
+
+### Read a body
+```sql
+sqlite3 "file:infra/var/mail-gmail-work.db?mode=ro" "
+  SELECT body FROM messages WHERE id = MSG_ID"
+```
+
+Bodies are stored inline — no need for `.emlx` file lookups.
+
+## Reading (Apple Mail — macOS fallback)
+
+When the IMAP-synced DB is empty or unavailable, fall back to Apple Mail's local
+Envelope Index. This only works on macOS machines with Mail.app configured.
 
 - **DB:** `~/Library/Mail/V10/MailData/Envelope Index` (the `V*` number varies by macOS — `ls ~/Library/Mail/` to confirm)
 - **Open read-only:** `sqlite3 "file:$HOME/Library/Mail/V10/MailData/Envelope Index?mode=ro"`
@@ -36,10 +77,9 @@ sqlite3 "file:$HOME/Library/Mail/V10/MailData/Envelope Index?mode=ro" "
 ```
 - **By sender:** `WHERE (a.comment LIKE '%NAME%' OR a.address LIKE '%EMAIL%')`
 - **By date:** `WHERE m.date_received >= strftime('%s','2026-01-01')`
-- **Attachments:** join `attachments att ON att.message=m.ROWID WHERE att.name LIKE '%.pdf%'`
 - **Thread:** `WHERE m.conversation_id = CONVERSATION_ID ORDER BY m.date_received ASC`
 
-### Read a body
+### Read a body (Apple Mail only)
 Bodies are in `.emlx` files, not the index:
 ```bash
 find ~/Library/Mail/V10 -name "ROWID.emlx" 2>/dev/null

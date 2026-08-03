@@ -9,9 +9,10 @@ alias msg="~/Projects/haak/infra/scripts/msg"
 alias inbox="~/Projects/haak/infra/scripts/inbox"
 alias sdb="python ~/Projects/haak/infra/scripts/session-db"
 alias sr="~/Projects/haak/infra/scripts/session-resume"
+alias zed-recover="~/Projects/zmainen/dotfiles/zed-recover"
 
 # tools
-alias secrets="~/Projects/secrets-cli/secrets"
+alias secrets="~/Projects/zmainen/secrets-cli/secrets"
 
 claude() {
     local dir="$PWD" agent=""
@@ -24,6 +25,19 @@ claude() {
             fi
             dir="${dir%/*}"
         done
+        # Extract --agent override from args
+        local resolved_agent="${agent:-haak}"
+        local arg_prev=""
+        for arg in "$@"; do
+            if [[ "$arg_prev" == "--agent" ]]; then
+                resolved_agent="$arg"
+            fi
+            arg_prev="$arg"
+        done
+        # Record breadcrumb: CWD + agent + TTY + timestamp
+        # zed-recover reads this to match terminals to sessions
+        local crumb_file="$HOME/.claude/terminal-breadcrumbs"
+        printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$PWD" "$resolved_agent" "$(tty 2>/dev/null || echo unknown)" >> "$crumb_file" 2>/dev/null
         command claude --agent "${agent:-haak}" "$@"
     else
         command claude "$@"

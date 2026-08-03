@@ -1,7 +1,7 @@
 #!/usr/bin/env zsh
 
 # --- Homebrew ---
-export PATH="/opt/homebrew/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 # --- Oh My Zsh ---
 export ZSH="$HOME/.oh-my-zsh"
@@ -18,6 +18,12 @@ export HAAK_ROOT="$HOME/Projects/haak"
 # emits the curated shell_env set from Keychain — the replacement for the old
 # `source ~/.secrets`. See infra/credentials/2026-05-29-secrets-env-migration-rfc.md
 eval "$("$HOME/Projects/secrets-cli/secrets" export 2>/dev/null)"
+
+# --- Agent identity ---
+# HAAK_AGENT_TOKEN is the per-agent MCP credential. .mcp.json uses it.
+# Default: shared MCP_AUTH_TOKEN (unverified identity — audit mode allows it).
+# Per-agent override: `claude-agent <name>` reads the real credential from Keychain.
+export HAAK_AGENT_TOKEN="${HAAK_AGENT_TOKEN:-$MCP_AUTH_TOKEN}"
 
 # --- PATH ---
 export PATH="$HOME/.local/bin:$PATH"
